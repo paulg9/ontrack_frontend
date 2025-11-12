@@ -23,14 +23,14 @@ export const useFeedbackStore = defineStore('feedback', {
   actions: {
     async refreshSummary() {
       const auth = useAuthStore()
-      if (!auth.userId) {
+      if (!auth.token) {
         this.summary = null
         return
       }
       this.loading = true
       this.error = ''
       try {
-        const [row] = await getSummaryMetrics(auth.userId)
+        const [row] = await getSummaryMetrics({ session: auth.token })
         this.summary = row || null
       } catch (error) {
         this.error = error.message
@@ -40,14 +40,14 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async loadMessages() {
       const auth = useAuthStore()
-      if (!auth.userId) {
+      if (!auth.token) {
         this.reminders = []
         return
       }
       this.loading = true
       this.error = ''
       try {
-        const rows = await listMessages(auth.userId)
+        const rows = await listMessages({ session: auth.token })
         this.reminders = rows || []
       } catch (error) {
         this.error = error.message
@@ -57,11 +57,16 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async recompute(payload) {
       const auth = useAuthStore()
-      if (!auth.userId) throw new Error('Sign in required')
+      if (!auth.token) throw new Error('Sign in required')
+      if (!auth.isAdmin) throw new Error('Administrator access required')
       this.loading = true
       this.error = ''
       try {
-        const result = await recomputeSummary({ owner: auth.userId, ...payload })
+        const result = await recomputeSummary({
+          session: auth.token,
+          owner: auth.userId,
+          ...payload,
+        })
         this.summary = {
           streakCount: result.newStreakCount,
           completion7d: result.newCompletion7d,
@@ -75,11 +80,12 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async recordReminder(payload) {
       const auth = useAuthStore()
-      if (!auth.userId) throw new Error('Sign in required')
+      if (!auth.token) throw new Error('Sign in required')
+      if (!auth.isAdmin) throw new Error('Administrator access required')
       this.loading = true
       this.error = ''
       try {
-        const result = await recordMessage({ owner: auth.userId, ...payload })
+        const result = await recordMessage({ session: auth.token, owner: auth.userId, ...payload })
         this.reminders.unshift({
           _id: result.messageId,
           owner: auth.userId,
@@ -95,11 +101,11 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async triggerReminder() {
       const auth = useAuthStore()
-      if (!auth.userId) throw new Error('Sign in required')
+      if (!auth.token) throw new Error('Sign in required')
       this.loading = true
       this.error = ''
       try {
-        await sendReminder(auth.userId)
+        await sendReminder({ session: auth.token, owner: auth.userId })
         this.reminderStatus = 'sent'
         await this.loadMessages()
       } catch (error) {
@@ -111,9 +117,9 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async checkReminderStatus(dateISO) {
       const auth = useAuthStore()
-      if (!auth.userId) return
+      if (!auth.token) return
       try {
-        const [row] = await hasSentReminderToday(auth.userId, dateISO)
+        const [row] = await hasSentReminderToday({ session: auth.token, date: dateISO })
         this.reminderStatus = row?.sent ? 'sent' : 'not-sent'
       } catch (error) {
         this.error = error.message
@@ -121,11 +127,11 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async createShareLink(ttlSeconds = 604800) {
       const auth = useAuthStore()
-      if (!auth.userId) throw new Error('Sign in required')
+      if (!auth.token) throw new Error('Sign in required')
       this.loading = true
       this.error = ''
       try {
-        const result = await createShareLink({ owner: auth.userId, ttlSeconds })
+        const result = await createShareLink({ session: auth.token, ttlSeconds })
         await this.loadShareLinks()
         return result.token
       } catch (error) {
@@ -137,13 +143,13 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async revokeShareLink(token) {
       const auth = useAuthStore()
-      if (!auth.userId) return
+      if (!auth.token) return
       const targetToken = token || this.shareLinks?.[0]?.token
       if (!targetToken) return
       this.loading = true
       this.error = ''
       try {
-        await revokeShareLink({ owner: auth.userId, token: targetToken })
+        await revokeShareLink({ session: auth.token, token: targetToken })
         await this.loadShareLinks()
       } catch (error) {
         this.error = error.message
@@ -154,14 +160,14 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async loadShareLinks() {
       const auth = useAuthStore()
-      if (!auth.userId) {
+      if (!auth.token) {
         this.shareLinks = []
         return
       }
       this.loading = true
       this.error = ''
       try {
-        const rows = await listShareLinks(auth.userId)
+        const rows = await listShareLinks(auth.token)
         this.shareLinks = rows || []
       } catch (error) {
         this.error = error.message
@@ -171,10 +177,10 @@ export const useFeedbackStore = defineStore('feedback', {
     },
     async recordCompletionStatus(completedAll) {
       const auth = useAuthStore()
-      if (!auth.userId) return
+      if (!auth.token) return
       try {
         const date = new Date().toISOString().slice(0, 10)
-        const result = await recordCompletion({ owner: auth.userId, date, completedAll })
+        const result = await recordCompletion({ session: auth.token, date, completedAll })
         if (result) {
           this.summary = {
             streakCount: result.streakCount ?? this.summary?.streakCount ?? 0,

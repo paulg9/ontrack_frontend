@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import {
-  getUserByToken,
+  getUserBySession,
   isAdmin as fetchIsAdmin,
   isSignedIn,
   loginUser,
@@ -49,12 +49,12 @@ export const useAuthStore = defineStore('auth', {
   },
   actions: {
     async resolveToken(token, fallbackUsername = '') {
-      const userRows = await getUserByToken(token)
+      const userRows = await getUserBySession(token)
       const userId = userRows?.[0]?.user
       if (!userId) {
         throw new Error('Unable to resolve user from token')
       }
-      const adminRows = await fetchIsAdmin(userId)
+      const adminRows = await fetchIsAdmin(token)
       const isAdmin = Boolean(adminRows?.[0]?.isAdmin)
       const usernameToStore = fallbackUsername || this.username || ''
       this.setSession({ token, userId, username: usernameToStore, isAdmin })

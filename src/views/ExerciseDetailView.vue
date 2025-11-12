@@ -37,7 +37,7 @@ const hasVideo = computed(() => Boolean(exercise.value?.videoUrl))
 
 const loadData = async () => {
   if (!exercisesStore.exercises.length) {
-    await exercisesStore.fetchExercises(true)
+    await exercisesStore.fetchExercises({ includeDeprecated: true })
   }
   await exercisesStore.fetchProposals({ exerciseId: exerciseId.value })
 }

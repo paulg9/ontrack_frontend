@@ -23,22 +23,29 @@ export const usePlanStore = defineStore('plan', () => {
   }
 
   const loadActivePlan = async () => {
-    if (!ownerId.value) {
+    if (!authStore.token) {
       reset()
       return
     }
     loading.value = true
     error.value = ''
     try {
-      const rows = await getActivePlanByOwner(ownerId.value)
+      const rows = await getActivePlanByOwner({ session: authStore.token })
       const activePlan = rows?.[0]
       if (activePlan) {
         planId.value = activePlan._id
         items.value = activePlan.items || []
       } else {
-        const { plan } = await createPlan({ actor: ownerId.value, owner: ownerId.value })
-        planId.value = plan
-        items.value = []
+        const { plan } = await createPlan({ session: authStore.token })
+        const refreshed = await getActivePlanByOwner({ session: authStore.token })
+        const refreshedPlan = refreshed?.[0]
+        if (refreshedPlan) {
+          planId.value = refreshedPlan._id
+          items.value = refreshedPlan.items || []
+        } else {
+          planId.value = plan
+          items.value = []
+        }
       }
     } catch (err) {
       error.value = err.message
@@ -52,6 +59,9 @@ export const usePlanStore = defineStore('plan', () => {
     if (!ownerId.value) {
       throw new Error('Please sign in to load your plan.')
     }
+    if (!authStore.token) {
+      throw new Error('Missing session token.')
+    }
     if (!planId.value) {
       await loadActivePlan()
     }
@@ -59,11 +69,15 @@ export const usePlanStore = defineStore('plan', () => {
 
   const addItem = async (payload) => {
     await ensureInitialized()
-    const body = { ...payload, plan: planId.value, actor: ownerId.value }
+    const request = {
+      session: authStore.token,
+      plan: planId.value,
+      ...payload,
+    }
     loading.value = true
     error.value = ''
     try {
-      await addPlanItem(body)
+      await addPlanItem(request)
       await loadActivePlan()
     } catch (err) {
       error.value = err.message
@@ -74,11 +88,15 @@ export const usePlanStore = defineStore('plan', () => {
   }
 
   const removeItemByExercise = async (exerciseId) => {
-    if (!planId.value) return
+    if (!authStore.token || !planId.value) return
     loading.value = true
     error.value = ''
     try {
-      await removePlanItem({ actor: ownerId.value, plan: planId.value, exercise: exerciseId })
+      await removePlanItem({
+        session: authStore.token,
+        plan: planId.value,
+        exercise: exerciseId,
+      })
       await loadActivePlan()
     } catch (err) {
       error.value = err.message

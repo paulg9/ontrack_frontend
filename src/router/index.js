@@ -23,6 +23,12 @@ const routes = [
     component: () => import('../views/ProgressView.vue'),
   },
   {
+    path: '/progress/share/:token',
+    name: 'progress-share',
+    component: () => import('../views/ProgressShareView.vue'),
+    props: true,
+  },
+  {
     path: '/reminders',
     name: 'reminders',
     component: () => import('../views/RemindersView.vue'),

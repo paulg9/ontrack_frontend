@@ -14,9 +14,14 @@ const form = reactive({
 })
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+const canManage = computed(() => authStore.isAdmin)
 
 const submitManualReminder = async () => {
   if (!form.text.trim()) return
+  if (!canManage.value) {
+    form.error = 'Administrator access required to record reminders.'
+    return
+  }
   form.isSubmitting = true
   form.error = ''
   try {
@@ -30,6 +35,7 @@ const submitManualReminder = async () => {
 }
 
 const triggerSystemReminder = async () => {
+  if (!isAuthenticated.value) return
   try {
     await feedbackStore.triggerReminder()
   } catch (error) {
@@ -61,7 +67,7 @@ watch(isAuthenticated, async (next) => {
       <p>Sign in to view and record reminders.</p>
     </article>
 
-    <article v-else class="card">
+    <article v-else-if="canManage" class="card">
       <h2>Send yourself a reminder</h2>
       <form @submit.prevent="submitManualReminder" class="form">
         <label>
@@ -85,6 +91,13 @@ watch(isAuthenticated, async (next) => {
         </button>
         <p v-if="form.error" class="error">{{ form.error }}</p>
       </form>
+    </article>
+
+    <article v-else class="card info">
+      <p>
+        Admin tools for drafting reminder messages are unavailable on this account. You can still
+        trigger reminders using the button below.
+      </p>
     </article>
 
     <article v-if="isAuthenticated" class="card">
@@ -136,6 +149,10 @@ header h1 {
 .form {
   display: grid;
   gap: 1rem;
+}
+
+.info {
+  color: #475569;
 }
 
 .form textarea {

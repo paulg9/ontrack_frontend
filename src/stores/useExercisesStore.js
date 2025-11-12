@@ -36,16 +36,27 @@ export const useExercisesStore = defineStore('exercises', {
   actions: {
     ensureAdmin() {
       const auth = useAuthStore()
+      if (!auth.token) {
+        throw new Error('Sign in required for this action.')
+      }
       if (!auth.isAdmin) {
         throw new Error('Administrator privileges required for this action.')
       }
       return auth
     },
     async fetchExercises(options = { includeDeprecated: false }) {
+      const auth = useAuthStore()
+      if (!auth.token) {
+        this.exercises = []
+        return
+      }
       this.loading = true
       this.error = ''
       try {
-        const rows = await listExercises(options.includeDeprecated)
+        const rows = await listExercises({
+          session: auth.token,
+          includeDeprecated: options.includeDeprecated,
+        })
         this.exercises = normalize(rows)
         this.lastLoadedAt = new Date().toISOString()
       } catch (error) {
@@ -55,8 +66,10 @@ export const useExercisesStore = defineStore('exercises', {
       }
     },
     async refreshExercise(id) {
+      const auth = useAuthStore()
+      if (!auth.token) return
       try {
-        const [record] = await getExerciseById(id)
+        const [record] = await getExerciseById({ session: auth.token, exercise: id })
         if (record) {
           const index = this.exercises.findIndex((item) => item._id === id)
           if (index >= 0) {
@@ -71,8 +84,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async createExercise(exercise) {
       try {
-        this.ensureAdmin()
-        const result = await addExercise(exercise)
+        const auth = this.ensureAdmin()
+        const result = await addExercise({ session: auth.token, ...exercise })
         await this.refreshExercise(result.exercise)
         return result.exercise
       } catch (error) {
@@ -82,8 +95,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async createDraft(title) {
       try {
-        this.ensureAdmin()
-        const result = await addExerciseDraft(title)
+        const auth = this.ensureAdmin()
+        const result = await addExerciseDraft({ session: auth.token, title })
         return result.exercise
       } catch (error) {
         this.error = error.message
@@ -92,8 +105,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async saveExercise(update) {
       try {
-        this.ensureAdmin()
-        await updateExercise(update)
+        const auth = this.ensureAdmin()
+        await updateExercise({ session: auth.token, ...update })
         await this.refreshExercise(update.exercise)
       } catch (error) {
         this.error = error.message
@@ -102,14 +115,26 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async fetchProposals({ status, exerciseId } = {}) {
       try {
+        const auth = useAuthStore()
+        if (!auth.token) {
+          this.proposals = []
+          return
+        }
         if (exerciseId) {
-          const rows = await getProposalsForExercise(exerciseId)
+          const rows = await getProposalsForExercise({
+            session: auth.token,
+            exercise: exerciseId,
+          })
           this.proposals = [
             ...this.proposals.filter((p) => p.exercise !== exerciseId),
             ...normalize(rows),
           ]
         } else {
-          this.proposals = normalize(await listProposals(status))
+          this.proposals = normalize(
+            await listProposals(
+              status ? { session: auth.token, status } : { session: auth.token },
+            ),
+          )
         }
       } catch (error) {
         this.error = error.message
@@ -118,8 +143,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async requestProposal(exerciseId) {
       try {
-        this.ensureAdmin()
-        const result = await proposeDetails(exerciseId)
+        const auth = this.ensureAdmin()
+        const result = await proposeDetails({ session: auth.token, exercise: exerciseId })
         await this.fetchProposals({ exerciseId })
         return result
       } catch (error) {
@@ -129,8 +154,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async applyProposal(proposalId) {
       try {
-        this.ensureAdmin()
-        await applyDetails(proposalId)
+        const auth = this.ensureAdmin()
+        await applyDetails({ session: auth.token, proposal: proposalId })
         await this.fetchProposals()
       } catch (error) {
         this.error = error.message
@@ -139,8 +164,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async discardProposal(proposalId) {
       try {
-        this.ensureAdmin()
-        await discardDetails(proposalId)
+        const auth = this.ensureAdmin()
+        await discardDetails({ session: auth.token, proposal: proposalId })
         await this.fetchProposals()
       } catch (error) {
         this.error = error.message
@@ -149,8 +174,8 @@ export const useExercisesStore = defineStore('exercises', {
     },
     async deprecateExercise(exerciseId) {
       try {
-        this.ensureAdmin()
-        await deprecateExercise(exerciseId)
+        const auth = this.ensureAdmin()
+        await deprecateExercise({ session: auth.token, exercise: exerciseId })
         await this.refreshExercise(exerciseId)
       } catch (error) {
         this.error = error.message

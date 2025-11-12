@@ -3,7 +3,6 @@ import {
   amendCheckIn,
   getCheckInByOwnerAndDate,
   getCheckInsByOwner,
-  hasCheckIn,
   submitCheckIn,
 } from '../services/checkInService'
 import { useAuthStore } from './useAuthStore'
@@ -25,14 +24,17 @@ export const useCheckInsStore = defineStore('checkins', {
   actions: {
     async loadToday() {
       const auth = useAuthStore()
-      if (!auth.userId) {
+      if (!auth.token) {
         this.today = null
         return
       }
       this.loading = true
       this.error = ''
       try {
-        const [row] = await getCheckInByOwnerAndDate(auth.userId, todayISO())
+        const [row] = await getCheckInByOwnerAndDate({
+          session: auth.token,
+          date: todayISO(),
+        })
         this.today = row || null
       } catch (error) {
         this.error = error.message
@@ -42,10 +44,9 @@ export const useCheckInsStore = defineStore('checkins', {
     },
     async submit(payload) {
       const auth = useAuthStore()
-      if (!auth.userId) throw new Error('Sign in required to submit a check-in.')
+      if (!auth.token || !auth.userId) throw new Error('Sign in required to submit a check-in.')
       const body = {
-        actor: auth.userId,
-        owner: auth.userId,
+        session: auth.token,
         date: todayISO(),
         ...payload,
       }
@@ -53,7 +54,7 @@ export const useCheckInsStore = defineStore('checkins', {
       this.error = ''
       try {
         const result = await submitCheckIn(body)
-        this.today = { _id: result.checkin, ...body }
+        this.today = { _id: result.checkin, owner: auth.userId, ...payload, date: body.date }
         return result.checkin
       } catch (error) {
         this.error = error.message
@@ -63,11 +64,12 @@ export const useCheckInsStore = defineStore('checkins', {
       }
     },
     async amend(update) {
-      if (!this.today?._id) return
+      const auth = useAuthStore()
+      if (!auth.token || !this.today?._id) return
       this.loading = true
       this.error = ''
       try {
-        await amendCheckIn({ actor: this.today.owner, checkin: this.today._id, ...update })
+        await amendCheckIn({ session: auth.token, checkin: this.today._id, ...update })
         this.today = { ...this.today, ...update }
       } catch (error) {
         this.error = error.message
@@ -78,14 +80,14 @@ export const useCheckInsStore = defineStore('checkins', {
     },
     async loadHistory() {
       const auth = useAuthStore()
-      if (!auth.userId) {
+      if (!auth.token) {
         this.history = []
         return
       }
       this.loading = true
       this.error = ''
       try {
-        const rows = await getCheckInsByOwner(auth.userId)
+        const rows = await getCheckInsByOwner({ session: auth.token })
         this.history = rows || []
       } catch (error) {
         this.error = error.message
